@@ -12,8 +12,9 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useFonts, BreeSerif_400Regular } from "@expo-google-fonts/bree-serif";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { db } from "../../Config/Firebase/fb"; // Importando a configuração do Firestore
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { auth } from "../../Config/Firebase/fb";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { mensagemDeErro, emailValido } from "../../Config/Firebase/erros";
 
 export default function Login() {
   const navigation = useNavigation();
@@ -29,35 +30,26 @@ export default function Login() {
   }
 
   const handleLogin = async () => {
-    setIsLoading(true); // Inicia o carregamento
+    if (isLoading) return;
+    const emailLimpo = email.trim().toLowerCase();
+
+    if (!emailValido(emailLimpo) || password.length === 0) {
+      Alert.alert("Erro", "Informe um e-mail válido e a senha.");
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const q = query(collection(db, "usuarios"), where("Email", "==", email));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        Alert.alert("Erro", "Email não encontrado.");
-        setIsLoading(false); // Finaliza o carregamento
-        return;
-      }
-
-      let user = null;
-      querySnapshot.forEach((doc) => {
-        user = { id: doc.id, ...doc.data() }; // Captura o objeto do cliente com ID
-      });
-
-      if (user.Senha !== password) {
-        Alert.alert("Erro", "Senha incorreta.");
-        setIsLoading(false); // Finaliza o carregamento
-      } else {
-        Alert.alert("Sucesso", "Login realizado com sucesso!");
-        setIsLoading(false); // Finaliza o carregamento
-        // navigation.navigate("Home", { userData: user }); // Passa o objeto completo para a Home
-        setEmail("");
-        setPassword("");
-      }
+      // O Firebase Authentication confere a senha. Ela nunca é lida nem comparada no app.
+      await signInWithEmailAndPassword(auth, emailLimpo, password);
+      Alert.alert("Sucesso", "Login realizado com sucesso!");
+      // A tela inicial do usuário logado ainda será construída.
+      setEmail("");
+      setPassword("");
     } catch (error) {
-      Alert.alert("Erro", error.message);
-      setIsLoading(false); // Finaliza o carregamento
+      Alert.alert("Erro", mensagemDeErro(error));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -91,6 +83,8 @@ export default function Login() {
               fontSize={22}
               placeholder="seu@email.com"
               placeholderTextColor={"#E6E3F6"}
+              keyboardType="email-address"
+              autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
             />

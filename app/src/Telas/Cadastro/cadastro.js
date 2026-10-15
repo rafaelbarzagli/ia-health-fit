@@ -11,8 +11,10 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useFonts, BreeSerif_400Regular } from "@expo-google-fonts/bree-serif";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { db } from "../../Config/Firebase/fb"; // Importando a configuração do Firestore
-import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../../Config/Firebase/fb";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { mensagemDeErro, emailValido } from "../../Config/Firebase/erros";
 
 export default function Cadastro() {
   const navigation = useNavigation();
@@ -23,27 +25,49 @@ export default function Cadastro() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
   if (!fontsLoaded) {
     return null; // Adicione um componente de carregamento se necessário
   }
 
   const handleSignUp = async () => {
+    if (enviando) return;
+    const emailLimpo = email.trim().toLowerCase();
+
+    if (!emailValido(emailLimpo)) {
+      Alert.alert("Erro", "Digite um e-mail válido.");
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert("Erro", "A senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
     if (password !== confirmPassword) {
       Alert.alert("Erro", "As senhas não coincidem!");
       return;
     }
 
+    setEnviando(true);
     try {
-      // Adicionando usuário ao Firestore com o email como ID do documento
-      await setDoc(doc(db, "usuarios", email), {
-        Email: email,
-        Senha: password, // Em um ambiente de produção, não é recomendado armazenar senhas em texto claro
+      // A senha fica só no Firebase Authentication (guardada com segurança).
+      const { user } = await createUserWithEmailAndPassword(
+        auth,
+        emailLimpo,
+        password
+      );
+      // No Firestore vai apenas o perfil, usando o uid como ID. Nunca a senha.
+      await setDoc(doc(db, "usuarios", user.uid), {
+        Email: emailLimpo,
+        criadoEm: serverTimestamp(),
       });
-      Alert.alert("Sucesso", "Cadastro realizado com sucesso!");
-      // navigation.navigate("Cadastro2", { email: email });
+      Alert.alert("Sucesso", "Cadastro realizado com sucesso!", [
+        { text: "OK", onPress: () => navigation.navigate("Login") },
+      ]);
     } catch (error) {
-      Alert.alert("Erro", error.message);
+      Alert.alert("Erro", mensagemDeErro(error));
+    } finally {
+      setEnviando(false);
     }
   };
 
